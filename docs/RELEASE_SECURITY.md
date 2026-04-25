@@ -2,7 +2,7 @@
 
 ## Goal
 
-Every Windows release artifact should be built reproducibly in GitHub Actions, signed with a trusted Microsoft-backed Authenticode signature, timestamped, verified, hashed, and then published to GitHub Releases.
+Every public Windows release artifact should be signed with a trusted Authenticode signature, timestamped, verified, hashed, and then published to GitHub Releases.
 
 This improves trust for every current and future EXE. It does not promise that Microsoft Defender SmartScreen will never warn on a new release. For software distributed outside the Microsoft Store, SmartScreen still evaluates reputation for each new file hash.
 
@@ -15,35 +15,46 @@ Microsoft's current guidance for off-Store Windows apps is:
 - SmartScreen reputation is file-hash based, so each new build starts with little or no file reputation
 - EV certificates no longer provide immediate SmartScreen bypass for first downloads
 - Microsoft Store distribution is the only Microsoft-documented route that avoids SmartScreen download warnings by default
-- Microsoft Artifact Signing, formerly Trusted Signing, is the recommended Microsoft signing service for non-Store distribution
+- Microsoft Artifact Signing, formerly Trusted Signing, is Microsoft's recommended signing service for non-Store distribution, but it requires an Azure account
 
 Sources:
 
 - https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation
-- https://github.com/marketplace/actions/trusted-signing
+- https://github.com/Azure/artifact-signing-action
 
-## Implemented Release Path
+## Non-Azure Path
 
-The repository includes `.github/workflows/signed-release.yml`.
+If Azure is not acceptable, use a public-trust code-signing certificate from a traditional Certificate Authority such as DigiCert, Sectigo, GlobalSign, SSL.com, or another CA in the Microsoft Trusted Root Program.
 
-For every `v*` tag, or for a manually dispatched existing tag, the workflow:
+Modern public code-signing certificates normally keep the private key in protected hardware or a managed cloud signing service. That is a security requirement, not a repo setting. The exact signing method depends on the CA.
 
-1. checks out the release source
-2. installs Python 3.13 dependencies
-3. builds `XML_Editor_Desktop_<version>.exe`
-4. signs the EXE with Microsoft Artifact Signing
-5. verifies the Authenticode signature
-6. writes `SHA256SUMS.txt`
-7. creates or updates the GitHub release
-8. uploads the signed EXE and hash file
+The repository includes:
 
-The helper script `scripts/verify-release.ps1` verifies a local release asset's Authenticode signature and SHA256 hash.
+- `scripts/sign-release.ps1`: signs a local EXE with `signtool.exe`
+- `scripts/verify-release.ps1`: verifies a local EXE signature and SHA256 hash
 
-## Required One-Time Microsoft Setup
+Typical local flow:
 
-The workflow cannot sign until a Microsoft Artifact Signing account and certificate profile exist.
+```powershell
+.\build_exe.ps1
+.\scripts\sign-release.ps1 -Path .\release\XML_Editor_Desktop_vX.Y.Z.exe
+.\scripts\verify-release.ps1 -Path .\release\XML_Editor_Desktop_vX.Y.Z.exe
+gh release upload vX.Y.Z .\release\XML_Editor_Desktop_vX.Y.Z.exe --clobber
+```
 
-Required GitHub repository secrets:
+If more than one signing certificate is available, pass the certificate thumbprint:
+
+```powershell
+.\scripts\sign-release.ps1 -Path .\release\XML_Editor_Desktop_vX.Y.Z.exe -CertificateThumbprint "<thumbprint>"
+```
+
+## Optional Azure Path
+
+The repository also includes `.github/workflows/signed-release.yml`, which supports Microsoft Artifact Signing with GitHub OIDC. This path is inactive unless the required Azure-backed signing secrets are configured.
+
+Required GitHub environment: `release-signing`
+
+Required secrets:
 
 - `AZURE_TENANT_ID`
 - `AZURE_CLIENT_ID`
@@ -52,16 +63,16 @@ Required GitHub repository secrets:
 - `TRUSTED_SIGNING_ACCOUNT_NAME`
 - `TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME`
 
-The Azure identity must use a GitHub OIDC federated credential for this repository's `release-signing` environment and must have the Artifact Signing Certificate Profile Signer role for the certificate profile.
+This path is kept as an option, but it is not required if the project chooses a non-Azure CA certificate.
 
 ## Current Releases
 
-Existing unsigned assets such as `v0.9.0` and `v0.9.1` should be replaced by running the `Signed Release` workflow manually for each tag after signing is configured. The workflow uses `gh release upload --clobber`, so the release asset will be replaced by a signed binary with the same name.
+Existing unsigned assets such as `v0.9.0` and `v0.9.1` should be replaced by signed binaries once a signing certificate or signing provider is available. Use `gh release upload --clobber` to replace release assets with signed files of the same name.
 
 ## Future Releases
 
-Future releases should be created by pushing a `vX.Y.Z` tag and allowing the `Signed Release` workflow to publish the release asset. Avoid manually uploading unsigned EXE files to GitHub Releases.
+Future releases should not publish unsigned EXE files for public users. Build, sign, verify, hash, then upload.
 
 ## Remaining Reality
 
-Code signing is necessary, but Microsoft does not guarantee immediate no-warning SmartScreen behavior for every new off-Store file. If zero-warning first-run distribution is mandatory, publish through the Microsoft Store.
+Code signing is necessary, but Microsoft does not guarantee immediate no-warning SmartScreen behavior for every new off-Store file. If zero-warning first-download distribution is mandatory, publish through the Microsoft Store.

@@ -32,6 +32,7 @@ jobs:
           test -f style.css
           test -f requirements.txt
           test -f docs/RELEASE_SECURITY.md
+          test -f scripts/sign-release.ps1
           test -f scripts/verify-release.ps1
           test -f .github/workflows/signed-release.yml
 
