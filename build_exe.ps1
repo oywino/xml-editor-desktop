@@ -8,6 +8,18 @@ $releaseDir = Join-Path $projectRoot "release"
 $separator = if ($IsWindows) { ";" } else { ":" }
 
 function Get-PythonCommand {
+  $venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
+  if (Test-Path $venvPython) {
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & $venvPython -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] < (3, 14) else 1)" *> $null
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorActionPreference
+    if ($exitCode -eq 0) {
+      return @($venvPython)
+    }
+  }
+
   if (Get-Command py -ErrorAction SilentlyContinue) {
     foreach ($version in @("3.13", "3.12", "3.11", "3.10")) {
       $previousErrorActionPreference = $ErrorActionPreference
