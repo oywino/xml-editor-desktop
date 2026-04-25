@@ -108,6 +108,8 @@ Packaged builds check releases from:
 https://github.com/oywino/xml-editor-desktop/releases
 ```
 
+For public distribution, use the signed release workflow rather than manually uploading local EXE files. See `docs/RELEASE_SECURITY.md`.
+
 ## Development Workflow
 
 1. branch from `main`

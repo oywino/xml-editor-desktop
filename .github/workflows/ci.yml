@@ -31,6 +31,9 @@ jobs:
           test -f index.html
           test -f style.css
           test -f requirements.txt
+          test -f docs/RELEASE_SECURITY.md
+          test -f scripts/verify-release.ps1
+          test -f .github/workflows/signed-release.yml
 
       - name: Verify desktop entrypoint references assets
         run: |
