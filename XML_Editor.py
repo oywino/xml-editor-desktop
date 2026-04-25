@@ -236,12 +236,12 @@ def write_clipboard_text(text: str) -> bool:
 
 class DesktopApi:
     def __init__(self) -> None:
-        self.window = None
+        self._window = None
         self._dirty = False
         self._lock = threading.Lock()
 
     def set_window(self, window: Any) -> None:
-        self.window = window
+        self._window = window
 
     def get_app_info(self) -> dict[str, Any]:
         return {
@@ -262,20 +262,20 @@ class DesktopApi:
     def confirm_discard_changes(self) -> bool:
         if not self.has_unsaved_changes():
             return True
-        if self.window is None:
+        if self._window is None:
             return False
         return bool(
-            self.window.create_confirmation_dialog(
+            self._window.create_confirmation_dialog(
                 "Discard unsaved changes?",
                 "The current document has unsaved changes. Continue and discard them?",
             )
         )
 
     def open_file(self) -> dict[str, Any]:
-        if self.window is None:
+        if self._window is None:
             return {"ok": False, "cancelled": True}
 
-        selection = self.window.create_file_dialog(
+        selection = self._window.create_file_dialog(
             webview.OPEN_DIALOG,
             allow_multiple=False,
             file_types=(
@@ -301,12 +301,12 @@ class DesktopApi:
         }
 
     def save_file(self, payload: dict[str, Any]) -> dict[str, Any]:
-        if self.window is None:
+        if self._window is None:
             return {"ok": False, "cancelled": True}
 
         content = str(payload.get("content") or "")
         suggested_name = str(payload.get("suggestedName") or "xml_editor_document.md")
-        selection = self.window.create_file_dialog(
+        selection = self._window.create_file_dialog(
             webview.SAVE_DIALOG,
             save_filename=suggested_name,
             file_types=(
@@ -343,10 +343,10 @@ class DesktopApi:
 def handle_window_closing(api: DesktopApi) -> bool:
     if not api.has_unsaved_changes():
         return True
-    if api.window is None:
+    if api._window is None:
         return False
     return bool(
-        api.window.create_confirmation_dialog(
+        api._window.create_confirmation_dialog(
             "Close XML Editor Desktop?",
             "The current document has unsaved changes. Close anyway?",
         )
