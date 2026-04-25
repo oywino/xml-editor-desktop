@@ -33,7 +33,7 @@ The app remains local-first. The JavaScript editor owns XML parsing, visual edit
 - Python 3.10-3.13
 - pywebview
 - PyInstaller for packaged Windows builds
-- Microsoft Edge WebView2 Runtime on Windows. The app checks for it at startup and asks before installing Microsoft's Evergreen Runtime if it is missing.
+- Microsoft Edge WebView2 Runtime on Windows. The app checks for it at startup and exits with a clear message if it is missing.
 
 Install runtime dependencies with a supported Python runtime:
 
@@ -98,9 +98,8 @@ On Windows, XML Editor Desktop uses Microsoft Edge WebView2 Runtime for the nati
 At startup:
 
 1. if WebView2 Runtime is present, XML Editor Desktop runs normally
-2. if WebView2 Runtime is missing, the app asks whether to install Microsoft's Evergreen Runtime
-3. if the user accepts, the runtime is downloaded from Microsoft and installed silently
-4. if the user declines, XML Editor Desktop terminates
+2. if WebView2 Runtime is missing, XML Editor Desktop shows a clear message and terminates
+3. XML Editor Desktop does not download or install WebView2 Runtime on behalf of the user
 
 Packaged builds check releases from:
 

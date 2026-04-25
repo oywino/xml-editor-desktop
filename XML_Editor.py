@@ -42,9 +42,7 @@ GITHUB_LATEST_RELEASE_URL = "https://api.github.com/repos/oywino/xml-editor-desk
 UPDATE_CHECK_TIMEOUT_SECONDS = 4
 UPDATE_USER_AGENT = "XML-Editor-Desktop-Updater"
 DEBUG_ENV_VAR = "XML_EDITOR_DEBUG"
-WEBVIEW2_BOOTSTRAPPER_URL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 WEBVIEW2_CLIENT_GUID = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
-WEBVIEW2_INSTALL_TIMEOUT_SECONDS = 600
 
 
 def read_current_version() -> str:
@@ -271,60 +269,15 @@ def is_webview2_runtime_available() -> bool:
     return get_webview2_runtime_version() is not None
 
 
-def download_webview2_bootstrapper() -> Path:
-    temp_dir = Path(tempfile.mkdtemp(prefix="xml_editor_desktop_webview2_"))
-    temp_path = temp_dir / "MicrosoftEdgeWebview2Setup.exe"
-    request = urllib.request.Request(
-        WEBVIEW2_BOOTSTRAPPER_URL,
-        headers={"User-Agent": UPDATE_USER_AGENT},
-    )
-
-    with urllib.request.urlopen(request, timeout=60) as response:
-        with temp_path.open("wb") as fh:
-            fh.write(response.read())
-
-    return temp_path
-
-
-def install_webview2_runtime() -> bool:
-    try:
-        bootstrapper = download_webview2_bootstrapper()
-        completed = subprocess.run(
-            [str(bootstrapper), "/silent", "/install"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=WEBVIEW2_INSTALL_TIMEOUT_SECONDS,
-            check=False,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        )
-    except Exception:
-        return False
-
-    return completed.returncode == 0 and is_webview2_runtime_available()
-
-
 def ensure_webview2_runtime() -> bool:
     if is_webview2_runtime_available():
         return True
 
-    prompt = (
-        f"{APP_TITLE} requires Microsoft Edge WebView2 Runtime to display the app window.\n\n"
-        "Install Microsoft Edge WebView2 Runtime now?"
-    )
-    if not ask_yes_no(APP_TITLE, prompt):
-        return False
-
-    show_info_dialog(
-        APP_TITLE,
-        "Microsoft Edge WebView2 Runtime will now be installed. The app will start when installation finishes.",
-    )
-
-    if install_webview2_runtime():
-        return True
-
     show_error_dialog(
         APP_TITLE,
-        "Microsoft Edge WebView2 Runtime could not be installed. XML Editor Desktop will now close.",
+        f"{APP_TITLE} requires Microsoft Edge WebView2 Runtime to display the app window.\n\n"
+        "Please install WebView2 Runtime from Microsoft, then start XML Editor Desktop again.\n\n"
+        "XML Editor Desktop will now close.",
     )
     return False
 
