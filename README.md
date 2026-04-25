@@ -63,6 +63,13 @@ py XML_Editor.py
 
 The launcher opens `index.html` in a native WebView window and exposes a small Python API to JavaScript for desktop operations.
 
+To open WebView DevTools during development:
+
+```powershell
+$env:XML_EDITOR_DEBUG = "1"
+python XML_Editor.py
+```
+
 ## Build Windows EXE
 
 From the repository root:

@@ -35,6 +35,7 @@ ENTRYPOINT = BASE_DIR / "index.html"
 GITHUB_LATEST_RELEASE_URL = "https://api.github.com/repos/oywino/xml-editor-desktop/releases/latest"
 UPDATE_CHECK_TIMEOUT_SECONDS = 4
 UPDATE_USER_AGENT = "XML-Editor-Desktop-Updater"
+DEBUG_ENV_VAR = "XML_EDITOR_DEBUG"
 
 
 def read_current_version() -> str:
@@ -353,6 +354,11 @@ def handle_window_closing(api: DesktopApi) -> bool:
     )
 
 
+def is_debug_enabled() -> bool:
+    value = os.environ.get(DEBUG_ENV_VAR, "")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def main() -> None:
     if maybe_apply_update():
         return
@@ -380,7 +386,7 @@ def main() -> None:
     )
     api.set_window(window)
     window.events.closing += lambda: handle_window_closing(api)
-    webview.start(debug=not getattr(sys, "frozen", False))
+    webview.start(debug=is_debug_enabled())
 
 
 if __name__ == "__main__":
