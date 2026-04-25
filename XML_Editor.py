@@ -235,6 +235,13 @@ def write_clipboard_text(text: str) -> bool:
         return False
 
 
+def file_dialog_type(name: str) -> Any:
+    dialog = getattr(webview, "FileDialog", None)
+    if dialog is not None and hasattr(dialog, name):
+        return getattr(dialog, name)
+    return getattr(webview, f"{name}_DIALOG")
+
+
 class DesktopApi:
     def __init__(self) -> None:
         self._window = None
@@ -277,7 +284,7 @@ class DesktopApi:
             return {"ok": False, "cancelled": True}
 
         selection = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            file_dialog_type("OPEN"),
             allow_multiple=False,
             file_types=(
                 "XML editor documents (*.md;*.txt;*.xml)",
@@ -308,7 +315,7 @@ class DesktopApi:
         content = str(payload.get("content") or "")
         suggested_name = str(payload.get("suggestedName") or "xml_editor_document.md")
         selection = self._window.create_file_dialog(
-            webview.SAVE_DIALOG,
+            file_dialog_type("SAVE"),
             save_filename=suggested_name,
             file_types=(
                 "Markdown files (*.md)",
