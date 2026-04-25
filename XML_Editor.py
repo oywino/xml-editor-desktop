@@ -21,8 +21,14 @@ if os.name == "nt":
         import ctypes
     except ImportError:  # pragma: no cover - Windows-only helper
         ctypes = None
+
+    try:
+        import winreg
+    except ImportError:  # pragma: no cover - Windows-only helper
+        winreg = None
 else:  # pragma: no cover - Windows-only helper
     ctypes = None
+    winreg = None
 
 if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
     BASE_DIR = Path(sys._MEIPASS)
@@ -36,6 +42,9 @@ GITHUB_LATEST_RELEASE_URL = "https://api.github.com/repos/oywino/xml-editor-desk
 UPDATE_CHECK_TIMEOUT_SECONDS = 4
 UPDATE_USER_AGENT = "XML-Editor-Desktop-Updater"
 DEBUG_ENV_VAR = "XML_EDITOR_DEBUG"
+WEBVIEW2_BOOTSTRAPPER_URL = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+WEBVIEW2_CLIENT_GUID = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+WEBVIEW2_INSTALL_TIMEOUT_SECONDS = 600
 
 
 def read_current_version() -> str:
@@ -112,6 +121,15 @@ def show_error_dialog(title: str, message: str) -> None:
         mb_ok = 0x00000000
         mb_iconerror = 0x00000010
         ctypes.windll.user32.MessageBoxW(None, message, title, mb_ok | mb_iconerror)
+    else:
+        print(f"{title}: {message}", file=sys.stderr)
+
+
+def show_info_dialog(title: str, message: str) -> None:
+    if os.name == "nt" and ctypes is not None:
+        mb_ok = 0x00000000
+        mb_iconinfo = 0x00000040
+        ctypes.windll.user32.MessageBoxW(None, message, title, mb_ok | mb_iconinfo)
     else:
         print(f"{title}: {message}", file=sys.stderr)
 
@@ -211,6 +229,104 @@ def maybe_apply_update() -> bool:
             "The update could not be downloaded or installed. The current version will continue to start normally.",
         )
         return False
+
+
+def is_valid_runtime_version(version: str | None) -> bool:
+    if not version:
+        return False
+
+    cleaned = version.strip()
+    if not cleaned or cleaned == "0.0.0.0":
+        return False
+
+    return any(part.isdigit() and int(part) > 0 for part in cleaned.split("."))
+
+
+def get_webview2_runtime_version() -> str | None:
+    if os.name != "nt" or winreg is None:
+        return None
+
+    registry_locations = [
+        (winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_CLIENT_GUID}"),
+        (winreg.HKEY_CURRENT_USER, rf"Software\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_CLIENT_GUID}"),
+        (winreg.HKEY_LOCAL_MACHINE, rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{WEBVIEW2_CLIENT_GUID}"),
+    ]
+
+    for root, subkey in registry_locations:
+        try:
+            with winreg.OpenKey(root, subkey) as key:
+                version = str(winreg.QueryValueEx(key, "pv")[0])
+        except OSError:
+            continue
+
+        if is_valid_runtime_version(version):
+            return version
+
+    return None
+
+
+def is_webview2_runtime_available() -> bool:
+    if os.name != "nt":
+        return True
+    return get_webview2_runtime_version() is not None
+
+
+def download_webview2_bootstrapper() -> Path:
+    temp_dir = Path(tempfile.mkdtemp(prefix="xml_editor_desktop_webview2_"))
+    temp_path = temp_dir / "MicrosoftEdgeWebview2Setup.exe"
+    request = urllib.request.Request(
+        WEBVIEW2_BOOTSTRAPPER_URL,
+        headers={"User-Agent": UPDATE_USER_AGENT},
+    )
+
+    with urllib.request.urlopen(request, timeout=60) as response:
+        with temp_path.open("wb") as fh:
+            fh.write(response.read())
+
+    return temp_path
+
+
+def install_webview2_runtime() -> bool:
+    try:
+        bootstrapper = download_webview2_bootstrapper()
+        completed = subprocess.run(
+            [str(bootstrapper), "/silent", "/install"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=WEBVIEW2_INSTALL_TIMEOUT_SECONDS,
+            check=False,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+    except Exception:
+        return False
+
+    return completed.returncode == 0 and is_webview2_runtime_available()
+
+
+def ensure_webview2_runtime() -> bool:
+    if is_webview2_runtime_available():
+        return True
+
+    prompt = (
+        f"{APP_TITLE} requires Microsoft Edge WebView2 Runtime to display the app window.\n\n"
+        "Install Microsoft Edge WebView2 Runtime now?"
+    )
+    if not ask_yes_no(APP_TITLE, prompt):
+        return False
+
+    show_info_dialog(
+        APP_TITLE,
+        "Microsoft Edge WebView2 Runtime will now be installed. The app will start when installation finishes.",
+    )
+
+    if install_webview2_runtime():
+        return True
+
+    show_error_dialog(
+        APP_TITLE,
+        "Microsoft Edge WebView2 Runtime could not be installed. XML Editor Desktop will now close.",
+    )
+    return False
 
 
 def read_text_file(path: Path) -> str:
@@ -368,6 +484,9 @@ def is_debug_enabled() -> bool:
 
 def main() -> None:
     if maybe_apply_update():
+        return
+
+    if not ensure_webview2_runtime():
         return
 
     if webview is None:
