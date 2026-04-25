@@ -52,7 +52,7 @@ Required GitHub repository secrets:
 - `TRUSTED_SIGNING_ACCOUNT_NAME`
 - `TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME`
 
-The Azure identity must use a GitHub OIDC federated credential for this repository and must have the Artifact Signing Certificate Profile Signer role for the certificate profile.
+The Azure identity must use a GitHub OIDC federated credential for this repository's `release-signing` environment and must have the Artifact Signing Certificate Profile Signer role for the certificate profile.
 
 ## Current Releases
 

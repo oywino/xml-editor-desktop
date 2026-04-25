@@ -18,6 +18,7 @@ permissions:
 jobs:
   build-sign-release:
     runs-on: windows-2022
+    environment: release-signing
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
 
