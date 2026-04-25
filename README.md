@@ -81,7 +81,7 @@ The build script will:
 Example output:
 
 ```text
-release\XML_Editor_Desktop_v0.8.0.exe
+release\XML_Editor_Desktop_v0.9.0.exe
 ```
 
 Packaged builds check releases from:
