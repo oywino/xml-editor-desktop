@@ -1,40 +1,51 @@
-# Python XML Editor
+# XML Editor Desktop
 
-`python_xml_editor` is a local browser-based XML prompt editor with a tiny Python launcher.
+`xml-editor-desktop` is the native desktop edition of the local XML editor. It started from the `python_xml_editor` `v0.8.0` release and now runs the existing HTML/CSS/JavaScript editor inside a Python-hosted native WebView window.
 
-It is designed for editing prompt documents that contain:
-
-- a free-form preamble, such as a Markdown heading or note
-- an XML body that can be edited visually instead of by hand
-
-The app runs entirely locally. Python serves the static files, and the browser handles parsing, editing, preview, and export.
+The app remains local-first. The JavaScript editor owns XML parsing, visual editing, raw editing, and export formatting. The Python host owns the desktop window, native file dialogs, clipboard access, app lifecycle, packaging, and update checks.
 
 ## Features
 
-- open `.md`, `.txt`, and `.xml` files
+- native desktop window instead of launching the system browser
+- open `.md`, `.txt`, and `.xml` files through native file dialogs
+- save AI-ready XML or full editor format through native save dialogs
+- copy export output through the host clipboard bridge
 - edit a prompt preamble separately from the XML structure
 - rename tags and edit attributes inline
 - add root, child, and sibling elements
 - reorder nodes with buttons or drag-and-drop
 - edit text nodes directly
-- escape XML special characters on export
-- support common XML-style attribute names such as `data-id` and `xml:lang`
-- preview raw XML output
-- export either AI-ready XML text or full editor format
+- preview and repair raw XML text
+- check GitHub Releases for packaged EXE updates
 
 ## Project Structure
 
-- `XML_Editor.py`: local launcher that serves the app and opens the browser
+- `XML_Editor.py`: Python/pywebview native host and desktop API bridge
 - `index.html`: single HTML mount point
-- `app.js`: main application logic, parsing, tree editing, rendering, and export
+- `app.js`: editor logic, native-host adapter, parsing, rendering, and export
 - `style.css`: application styling
-- `CONTRIBUTING.md`: contribution workflow and expectations
+- `requirements.txt`: desktop runtime dependency list
+- `build_exe.ps1`: Windows PyInstaller build script
 - `docs/ARCHITECTURE.md`: architecture and state model notes
 
 ## Requirements
 
-- Python 3.10 or newer is recommended
-- no third-party Python dependencies are required
+- Python 3.10-3.13
+- pywebview
+- PyInstaller for packaged Windows builds
+- Microsoft Edge WebView2 Runtime on Windows, if it is not already installed
+
+Install runtime dependencies with a supported Python runtime:
+
+```bash
+py -3.13 -m pip install -r requirements.txt
+```
+
+For packaging:
+
+```bash
+py -3.13 -m pip install pyinstaller
+```
 
 ## Run Locally
 
@@ -44,31 +55,17 @@ From the repository root:
 python XML_Editor.py
 ```
 
-If your machine uses the Windows launcher instead of `python`, you can also use:
+or on Windows:
 
 ```bash
 py XML_Editor.py
 ```
 
-The launcher will:
-
-1. find a free local port
-2. serve the repository directory over HTTP
-3. open `index.html` in your default browser
-
-Stop the server with `Ctrl+C`.
+The launcher opens `index.html` in a native WebView window and exposes a small Python API to JavaScript for desktop operations.
 
 ## Build Windows EXE
 
-The app can be packaged as a self-contained Windows executable while keeping the current Python launcher architecture.
-
-Recommended packaging tool:
-
-```bash
-py -3 -m pip install pyinstaller
-```
-
-Then build from the repository root:
+From the repository root:
 
 ```powershell
 .\build_exe.ps1
@@ -77,21 +74,21 @@ Then build from the repository root:
 The build script will:
 
 1. read the current app version from `app.js`
-2. run PyInstaller directly with the bundled launcher assets
-3. create a versioned executable in `release/`
+2. verify PyInstaller and pywebview are installed
+3. bundle `index.html`, `app.js`, and `style.css`
+4. create a versioned executable in `release/`
 
 Example output:
 
 ```text
-release\XML_Prompt_Editor_v0.8.0.exe
+release\XML_Editor_Desktop_v0.8.0.exe
 ```
 
-Packaging notes:
+Packaged builds check releases from:
 
-- the executable still uses the system browser
-- `index.html`, `app.js`, and `style.css` are bundled into the executable
-- `XML_Editor.py` contains a small PyInstaller compatibility path so the bundled assets can still be served correctly
-- packaged `.exe` builds check GitHub Releases on startup and can offer an in-place update when a newer release is available
+```text
+https://github.com/oywino/xml-editor-desktop/releases
+```
 
 ## Development Workflow
 
@@ -100,25 +97,13 @@ Packaging notes:
 3. open a pull request with a clear summary
 4. include screenshots for UI changes when useful
 
-This repository includes:
-
-- a pull request template in `.github/pull_request_template.md`
-- issue templates for bugs and feature requests
-- a basic GitHub Actions workflow for pull requests and pushes
-
 ## Architecture
 
 The application has two parts:
 
-1. a Python wrapper in `XML_Editor.py` that starts a local HTTP server
+1. a Python native host in `XML_Editor.py` that starts a desktop WebView window
 2. a plain JavaScript single-page app in `app.js` that parses mixed preamble + XML text into a tree, renders it visually, and serializes it back out for export
 
-The editor keeps all state in memory in the browser session and does not currently save automatically.
+The editor keeps document state in memory. Native open/save operations are explicit.
 
 More detail is available in `docs/ARCHITECTURE.md`.
-
-## Notes
-
-- the XML parsing logic is custom and currently optimized for simple prompt-style XML
-- export escapes text and attribute values so characters like `&`, `<`, and `"` remain valid XML
-- the app is intentionally lightweight and has no front-end framework or backend service

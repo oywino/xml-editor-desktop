@@ -28,6 +28,36 @@
   const TYPING_COMMIT_DELAY_MS = 800;
   let idCounter = 0;
   const XML_NAME_RE = /^[A-Za-z_][A-Za-z0-9_.:-]*$/;
+  const nativeHost = {
+    isAvailable() {
+      return !!window.pywebview?.api;
+    },
+    invoke(method, ...args) {
+      if (!this.isAvailable() || typeof window.pywebview.api[method] !== 'function') {
+        return Promise.resolve(null);
+      }
+      return window.pywebview.api[method](...args);
+    },
+    getAppInfo() {
+      return this.invoke('get_app_info');
+    },
+    setDirty(dirty) {
+      return this.invoke('set_dirty', dirty);
+    },
+    confirmDiscardChanges() {
+      return this.invoke('confirm_discard_changes');
+    },
+    openFile() {
+      return this.invoke('open_file');
+    },
+    saveFile(payload) {
+      return this.invoke('save_file', payload);
+    },
+    writeClipboard(content) {
+      return this.invoke('write_clipboard', content);
+    },
+  };
+  window.nativeHost = nativeHost;
 
   const state = {
     doc: null,
@@ -773,8 +803,14 @@
     return getCurrentRawText() !== state.lastSavedRawText;
   }
 
+  function syncNativeDirtyState() {
+    if (!nativeHost.isAvailable()) return;
+    nativeHost.setDirty(hasUnsavedChanges()).catch(() => {});
+  }
+
   function markCurrentStateAsSaved() {
     state.lastSavedRawText = getCurrentRawText();
+    syncNativeDirtyState();
   }
 
   function collectElementIds(nodes, ids = new Set()) {
@@ -1221,7 +1257,28 @@
     return true;
   }
 
-  function openFilePicker() {
+  async function openFilePicker() {
+    if (nativeHost.isAvailable()) {
+      if (hasUnsavedChanges()) {
+        const confirmed = await nativeHost.confirmDiscardChanges();
+        if (!confirmed) return false;
+      }
+
+      const result = await nativeHost.openFile();
+      if (!result?.ok) {
+        if (result && !result.cancelled && result.error) window.alert(`Open failed: ${result.error}`);
+        return false;
+      }
+
+      state.showRaw = false;
+      state.preambleEditing = false;
+      const isValid = applyRawText(String(result.content || ''), { markSaved: true });
+      if (!isValid) state.showRaw = true;
+      markCurrentStateAsSaved();
+      render();
+      return true;
+    }
+
     if (!state.fileInputEl) return false;
     state.fileInputEl.click();
     return true;
@@ -1672,7 +1729,19 @@
     return renderElementNode(node, depth, nodes);
   }
 
-  function downloadText(filename, content) {
+  async function downloadText(filename, content) {
+    if (nativeHost.isAvailable()) {
+      const result = await nativeHost.saveFile({
+        suggestedName: filename,
+        content,
+      });
+      if (!result?.ok) {
+        if (result && !result.cancelled && result.error) window.alert(`Save failed: ${result.error}`);
+        return false;
+      }
+      return true;
+    }
+
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1680,6 +1749,7 @@
     a.download = filename;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return true;
   }
 
   function renderHeader(root) {
@@ -1840,7 +1910,7 @@
 
     const centeredTitle = document.createElement('div');
     centeredTitle.className = 'topbar-title';
-    centeredTitle.textContent = 'XML Editor';
+    centeredTitle.textContent = nativeHost.isAvailable() ? 'XML Editor Desktop' : 'XML Editor';
     inner.appendChild(centeredTitle);
 
     const right = document.createElement('div');
@@ -2251,7 +2321,12 @@
     copy.textContent = state.copied ? 'Saved!' : 'Save to Clipboard';
     copy.addEventListener('click', async () => {
       try {
-        await navigator.clipboard.writeText(getExportContent());
+        if (nativeHost.isAvailable()) {
+          const result = await nativeHost.writeClipboard(getExportContent());
+          if (!result?.ok) throw new Error(result?.error || 'Clipboard is unavailable.');
+        } else {
+          await navigator.clipboard.writeText(getExportContent());
+        }
         markCurrentStateAsSaved();
         state.copied = true;
         render();
@@ -2259,8 +2334,8 @@
           state.copied = false;
           render();
         }, 1800);
-      } catch {
-        window.alert('Copy failed in this browser.');
+      } catch (error) {
+        window.alert(error?.message || 'Copy failed.');
       }
     });
     actions.appendChild(copy);
@@ -2269,11 +2344,11 @@
     download.type = 'button';
     download.className = 'download-btn';
     download.textContent = 'Save';
-    download.addEventListener('click', () => {
+    download.addEventListener('click', async () => {
       const ext = state.exportMode === 'ai' ? 'txt' : 'md';
       const filename = `prompt_${state.exportMode === 'ai' ? 'ai_ready' : 'editor'}.${ext}`;
-      downloadText(filename, getExportContent());
-      markCurrentStateAsSaved();
+      const saved = await downloadText(filename, getExportContent());
+      if (saved) markCurrentStateAsSaved();
     });
     actions.appendChild(download);
 
@@ -2381,9 +2456,11 @@
     renderExportModal(shell);
     renderAboutModal(shell);
     app.appendChild(shell);
+    syncNativeDirtyState();
   }
 
   function sendHeartbeat() {
+    if (nativeHost.isAvailable()) return;
     fetch('/__heartbeat', {
       method: 'POST',
       cache: 'no-store',
@@ -2392,6 +2469,7 @@
   }
 
   function startHeartbeat() {
+    if (nativeHost.isAvailable()) return;
     sendHeartbeat();
     window.setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
   }
@@ -2412,6 +2490,10 @@
     window.addEventListener('keydown', handleGlobalKeydown);
     document.addEventListener('mousedown', handleGlobalPointerDown);
     window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pywebviewready', () => {
+      syncNativeDirtyState();
+      render();
+    });
     startHeartbeat();
     render();
   }

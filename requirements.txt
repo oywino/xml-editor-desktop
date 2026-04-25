@@ -1,0 +1,3 @@
+# pywebview uses pythonnet on Windows. Use Python 3.10-3.13 until
+# pythonnet/pywebview support for Python 3.14 is available in normal wheels.
+pywebview>=6.0,<7.0; python_version < "3.14"

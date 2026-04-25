@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Compile Python launcher
+      - name: Compile Python desktop host
         run: python -m py_compile XML_Editor.py
 
       - name: Verify required app files exist
@@ -30,8 +30,15 @@ jobs:
           test -f app.js
           test -f index.html
           test -f style.css
+          test -f requirements.txt
 
-      - name: Verify browser entrypoint references assets
+      - name: Verify desktop entrypoint references assets
         run: |
           grep -q 'style.css' index.html
           grep -q 'app.js' index.html
+          grep -q 'XML Editor Desktop' index.html
+
+      - name: Verify desktop release target
+        run: |
+          grep -q 'oywino/xml-editor-desktop' XML_Editor.py
+          grep -q 'XML_Editor_Desktop' build_exe.ps1

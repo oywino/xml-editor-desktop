@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['C:\\Users\\eBruker\\Documents\\python_workspace\\python_xml_editor\\XML_Editor.py'],
+    ['XML_Editor.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:\\Users\\eBruker\\Documents\\python_workspace\\python_xml_editor\\index.html', '.'), ('C:\\Users\\eBruker\\Documents\\python_workspace\\python_xml_editor\\app.js', '.'), ('C:\\Users\\eBruker\\Documents\\python_workspace\\python_xml_editor\\style.css', '.')],
+    datas=[('index.html', '.'), ('app.js', '.'), ('style.css', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='XML_Prompt_Editor',
+    name='XML_Editor_Desktop',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

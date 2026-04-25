@@ -1,39 +1,20 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import contextlib
-import http
-import http.server
 import json
 import os
-import socket
 import subprocess
 import sys
 import tempfile
 import threading
-import time
-import urllib.parse
 import urllib.request
-import webbrowser
-import shlex
 from pathlib import Path
+from typing import Any
 
 try:
-    import winreg
-except ImportError:  # pragma: no cover - Windows-only helper
-    winreg = None
-
-if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-    BASE_DIR = Path(sys._MEIPASS)
-else:
-    BASE_DIR = Path(__file__).resolve().parent
-HOST = "127.0.0.1"
-HEARTBEAT_PATH = "/__heartbeat"
-STARTUP_TIMEOUT_SECONDS = 45
-HEARTBEAT_TIMEOUT_SECONDS = 12
-GITHUB_LATEST_RELEASE_URL = "https://api.github.com/repos/oywino/python_xml_editor/releases/latest"
-UPDATE_CHECK_TIMEOUT_SECONDS = 4
-UPDATE_USER_AGENT = "XML-Prompt-Editor-Updater"
+    import webview
+except ImportError:  # pragma: no cover - handled at runtime
+    webview = None
 
 if os.name == "nt":
     try:
@@ -43,12 +24,17 @@ if os.name == "nt":
 else:  # pragma: no cover - Windows-only helper
     ctypes = None
 
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    BASE_DIR = Path(sys._MEIPASS)
+else:
+    BASE_DIR = Path(__file__).resolve().parent
 
-def find_free_port(host: str = HOST) -> int:
-    with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-        sock.bind((host, 0))
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        return int(sock.getsockname()[1])
+APP_TITLE = "XML Editor Desktop"
+EXE_BASE_NAME = "XML_Editor_Desktop"
+ENTRYPOINT = BASE_DIR / "index.html"
+GITHUB_LATEST_RELEASE_URL = "https://api.github.com/repos/oywino/xml-editor-desktop/releases/latest"
+UPDATE_CHECK_TIMEOUT_SECONDS = 4
+UPDATE_USER_AGENT = "XML-Editor-Desktop-Updater"
 
 
 def read_current_version() -> str:
@@ -94,7 +80,7 @@ def is_newer_version(latest: str, current: str) -> bool:
     return latest_parts > current_parts
 
 
-def fetch_latest_release() -> dict | None:
+def fetch_latest_release() -> dict[str, Any] | None:
     request = urllib.request.Request(
         GITHUB_LATEST_RELEASE_URL,
         headers={
@@ -121,18 +107,18 @@ def ask_yes_no(title: str, message: str) -> bool:
 
 
 def show_error_dialog(title: str, message: str) -> None:
-    if os.name != "nt" or ctypes is None:
-        return
+    if os.name == "nt" and ctypes is not None:
+        mb_ok = 0x00000000
+        mb_iconerror = 0x00000010
+        ctypes.windll.user32.MessageBoxW(None, message, title, mb_ok | mb_iconerror)
+    else:
+        print(f"{title}: {message}", file=sys.stderr)
 
-    mb_ok = 0x00000000
-    mb_iconerror = 0x00000010
-    ctypes.windll.user32.MessageBoxW(None, message, title, mb_ok | mb_iconerror)
 
-
-def get_latest_release_asset(release: dict) -> tuple[str, str] | None:
+def get_latest_release_asset(release: dict[str, Any]) -> tuple[str, str] | None:
     tag = str(release.get("tag_name") or "").strip()
     assets = release.get("assets") or []
-    expected_name = f"XML_Prompt_Editor_{tag}.exe"
+    expected_name = f"{EXE_BASE_NAME}_{tag}.exe"
 
     for asset in assets:
         if asset.get("name") == expected_name:
@@ -143,8 +129,8 @@ def get_latest_release_asset(release: dict) -> tuple[str, str] | None:
 
 
 def download_update(download_url: str, version_tag: str) -> Path:
-    temp_dir = Path(tempfile.mkdtemp(prefix="xml_editor_update_"))
-    temp_path = temp_dir / f"XML_Prompt_Editor_{version_tag}.exe"
+    temp_dir = Path(tempfile.mkdtemp(prefix="xml_editor_desktop_update_"))
+    temp_path = temp_dir / f"{EXE_BASE_NAME}_{version_tag}.exe"
     request = urllib.request.Request(download_url, headers={"User-Agent": UPDATE_USER_AGENT})
 
     with urllib.request.urlopen(request, timeout=30) as response:
@@ -169,7 +155,7 @@ def create_update_script(current_exe: Path, downloaded_exe: Path) -> Path:
         "  goto waitloop",
         ")",
         'move /Y "%SOURCE%" "%TARGET%" >nul',
-        'if errorlevel 1 goto end',
+        "if errorlevel 1 goto end",
         'start "" "%TARGET%"',
         ":end",
         'del "%~f0"',
@@ -200,12 +186,12 @@ def maybe_apply_update() -> bool:
         return False
 
     prompt = (
-        f"A newer version of XML Prompt Editor is available.\n\n"
+        f"A newer version of {APP_TITLE} is available.\n\n"
         f"Current version: {current_version}\n"
         f"Latest version: {latest_version}\n\n"
-        f"Do you want to download and install the update now?"
+        "Do you want to download and install the update now?"
     )
-    if not ask_yes_no("XML Prompt Editor Update", prompt):
+    if not ask_yes_no(f"{APP_TITLE} Update", prompt):
         return False
 
     try:
@@ -220,153 +206,181 @@ def maybe_apply_update() -> bool:
         return True
     except Exception:
         show_error_dialog(
-            "XML Prompt Editor Update",
+            f"{APP_TITLE} Update",
             "The update could not be downloaded or installed. The current version will continue to start normally.",
         )
         return False
 
 
-class AppServer(http.server.ThreadingHTTPServer):
-    daemon_threads = True
-
-    def __init__(self, server_address, handler_class):
-        super().__init__(server_address, handler_class)
-        self.started_at = time.monotonic()
-        self.last_activity_at = self.started_at
-        self.seen_browser_client = False
-
-    def note_browser_activity(self) -> None:
-        self.last_activity_at = time.monotonic()
-        self.seen_browser_client = True
-
-
-class QuietHandler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(BASE_DIR), **kwargs)
-
-    def log_message(self, format: str, *args) -> None:
-        return
-
-    def end_headers(self) -> None:
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-        self.send_header("Pragma", "no-cache")
-        self.send_header("Expires", "0")
-        super().end_headers()
-
-    def do_GET(self) -> None:
-        path = urllib.parse.urlparse(self.path).path
-        if path != HEARTBEAT_PATH:
-            self.server.note_browser_activity()
-        super().do_GET()
-
-    def do_POST(self) -> None:
-        path = urllib.parse.urlparse(self.path).path
-        if path != HEARTBEAT_PATH:
-            self.send_error(http.HTTPStatus.NOT_FOUND)
-            return
-
-        self.server.note_browser_activity()
-        self.send_response(http.HTTPStatus.NO_CONTENT)
-        self.end_headers()
-
-
-def monitor_browser_activity(server: AppServer) -> None:
-    while True:
-        time.sleep(1)
-        now = time.monotonic()
-
-        if server.seen_browser_client:
-            if now - server.last_activity_at > HEARTBEAT_TIMEOUT_SECONDS:
-                print("Browser window closed. Stopping server.")
-                server.shutdown()
-                return
-        elif now - server.started_at > STARTUP_TIMEOUT_SECONDS:
-            print("No browser connection detected. Stopping server.")
-            server.shutdown()
-            return
-
-
-def get_default_browser_command() -> str | None:
-    if os.name != "nt" or winreg is None:
-        return None
-
-    candidates = (
-        r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice",
-        r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice",
-    )
-
-    prog_id = None
-    for subkey in candidates:
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, subkey) as key:
-                prog_id = winreg.QueryValueEx(key, "ProgId")[0]
-                break
-        except OSError:
-            continue
-
-    if not prog_id:
-        return None
-
+def read_text_file(path: Path) -> str:
     try:
-        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, fr"{prog_id}\shell\open\command") as key:
-            return str(winreg.QueryValueEx(key, None)[0])
-    except OSError:
-        return None
+        return path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        return path.read_text(encoding="utf-8", errors="replace")
 
 
-def open_in_new_browser_window(url: str) -> bool:
-    command = get_default_browser_command()
-    if not command:
-        return webbrowser.open_new(url)
-
+def write_clipboard_text(text: str) -> bool:
     try:
-        parts = shlex.split(command, posix=False)
-    except ValueError:
-        return webbrowser.open_new(url)
+        import tkinter
 
-    if not parts:
-        return webbrowser.open_new(url)
-
-    executable = parts[0].strip('"')
-    browser_name = Path(executable).name.lower()
-
-    if browser_name == "firefox.exe":
-        extra_args = ["-new-window"]
-    elif browser_name in {"chrome.exe", "msedge.exe", "brave.exe", "opera.exe", "vivaldi.exe"}:
-        extra_args = ["--new-window"]
-    else:
-        return webbrowser.open_new(url)
-
-    try:
-        subprocess.Popen([executable, *extra_args, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        root = tkinter.Tk()
+        root.withdraw()
+        root.clipboard_clear()
+        root.clipboard_append(text)
+        root.update()
+        root.destroy()
         return True
-    except OSError:
-        return webbrowser.open_new(url)
+    except Exception:
+        return False
+
+
+class DesktopApi:
+    def __init__(self) -> None:
+        self.window = None
+        self._dirty = False
+        self._lock = threading.Lock()
+
+    def set_window(self, window: Any) -> None:
+        self.window = window
+
+    def get_app_info(self) -> dict[str, Any]:
+        return {
+            "name": APP_TITLE,
+            "version": read_current_version(),
+            "native": True,
+        }
+
+    def set_dirty(self, dirty: bool) -> dict[str, bool]:
+        with self._lock:
+            self._dirty = bool(dirty)
+        return {"ok": True}
+
+    def has_unsaved_changes(self) -> bool:
+        with self._lock:
+            return self._dirty
+
+    def confirm_discard_changes(self) -> bool:
+        if not self.has_unsaved_changes():
+            return True
+        if self.window is None:
+            return False
+        return bool(
+            self.window.create_confirmation_dialog(
+                "Discard unsaved changes?",
+                "The current document has unsaved changes. Continue and discard them?",
+            )
+        )
+
+    def open_file(self) -> dict[str, Any]:
+        if self.window is None:
+            return {"ok": False, "cancelled": True}
+
+        selection = self.window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=(
+                "XML editor documents (*.md;*.txt;*.xml)",
+                "All files (*.*)",
+            ),
+        )
+        if not selection:
+            return {"ok": False, "cancelled": True}
+
+        selected_path = selection[0] if isinstance(selection, (list, tuple)) else selection
+        path = Path(selected_path)
+        try:
+            content = read_text_file(path)
+        except OSError as exc:
+            return {"ok": False, "cancelled": False, "error": str(exc)}
+
+        return {
+            "ok": True,
+            "name": path.name,
+            "path": str(path),
+            "content": content,
+        }
+
+    def save_file(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.window is None:
+            return {"ok": False, "cancelled": True}
+
+        content = str(payload.get("content") or "")
+        suggested_name = str(payload.get("suggestedName") or "xml_editor_document.md")
+        selection = self.window.create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename=suggested_name,
+            file_types=(
+                "Markdown files (*.md)",
+                "Text files (*.txt)",
+                "XML files (*.xml)",
+                "All files (*.*)",
+            ),
+        )
+        if not selection:
+            return {"ok": False, "cancelled": True}
+
+        selected_path = selection[0] if isinstance(selection, (list, tuple)) else selection
+        path = Path(selected_path)
+        try:
+            path.write_text(content, encoding="utf-8")
+        except OSError as exc:
+            return {"ok": False, "cancelled": False, "error": str(exc)}
+
+        self.set_dirty(False)
+        return {
+            "ok": True,
+            "path": str(path),
+            "name": path.name,
+        }
+
+    def write_clipboard(self, content: str) -> dict[str, Any]:
+        if write_clipboard_text(str(content or "")):
+            self.set_dirty(False)
+            return {"ok": True}
+        return {"ok": False, "error": "Clipboard is unavailable."}
+
+
+def handle_window_closing(api: DesktopApi) -> bool:
+    if not api.has_unsaved_changes():
+        return True
+    if api.window is None:
+        return False
+    return bool(
+        api.window.create_confirmation_dialog(
+            "Close XML Editor Desktop?",
+            "The current document has unsaved changes. Close anyway?",
+        )
+    )
 
 
 def main() -> None:
     if maybe_apply_update():
         return
 
-    port = find_free_port()
-    server = AppServer((HOST, port), QuietHandler)
-    url = f"http://{HOST}:{port}/index.html"
+    if webview is None:
+        show_error_dialog(
+            APP_TITLE,
+            "pywebview is not installed. Install Python 3.10-3.13, then run: py -3.13 -m pip install -r requirements.txt",
+        )
+        return
 
-    monitor = threading.Thread(target=monitor_browser_activity, args=(server,), daemon=True)
-    monitor.start()
+    if not ENTRYPOINT.exists():
+        show_error_dialog(APP_TITLE, f"Missing application entrypoint: {ENTRYPOINT}")
+        return
 
-    print("XML Prompt Editor")
-    print(f"Serving: {url}")
-
-    try:
-        time.sleep(0.35)
-        open_in_new_browser_window(url)
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.shutdown()
-        server.server_close()
+    api = DesktopApi()
+    window = webview.create_window(
+        APP_TITLE,
+        str(ENTRYPOINT),
+        js_api=api,
+        width=1180,
+        height=820,
+        min_size=(900, 620),
+        text_select=True,
+    )
+    api.set_window(window)
+    window.events.closing += lambda: handle_window_closing(api)
+    webview.start(debug=not getattr(sys, "frozen", False))
 
 
 if __name__ == "__main__":

@@ -9,14 +9,30 @@ $separator = if ($IsWindows) { ";" } else { ":" }
 
 function Get-PythonCommand {
   if (Get-Command py -ErrorAction SilentlyContinue) {
-    return @("py", "-3")
+    foreach ($version in @("3.13", "3.12", "3.11", "3.10")) {
+      $previousErrorActionPreference = $ErrorActionPreference
+      $ErrorActionPreference = "Continue"
+      & py "-$version" -c "import sys; raise SystemExit(0 if sys.version_info < (3, 14) else 1)" *> $null
+      $exitCode = $LASTEXITCODE
+      $ErrorActionPreference = $previousErrorActionPreference
+      if ($exitCode -eq 0) {
+        return @("py", "-$version")
+      }
+    }
   }
 
   if (Get-Command python -ErrorAction SilentlyContinue) {
-    return @("python")
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    python -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] < (3, 14) else 1)" *> $null
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousErrorActionPreference
+    if ($exitCode -eq 0) {
+      return @("python")
+    }
   }
 
-  throw "Python was not found on PATH. Install Python first."
+  throw "Python 3.10-3.13 was not found. Install a supported Python runtime first."
 }
 
 function Invoke-Python {
@@ -45,15 +61,21 @@ function Get-AppVersion {
 
 $pythonCmd = Get-PythonCommand
 $version = Get-AppVersion
-$outputName = "XML_Prompt_Editor_$version.exe"
-$distExePath = Join-Path $distDir "XML_Prompt_Editor.exe"
+$outputName = "XML_Editor_Desktop_$version.exe"
+$distExePath = Join-Path $distDir "XML_Editor_Desktop.exe"
 
-Write-Host "Building XML Prompt Editor $version"
+Write-Host "Building XML Editor Desktop $version"
 
 try {
   Invoke-Python -PythonCommand $pythonCmd -Arguments @("-m", "PyInstaller", "--version") | Out-Null
 } catch {
   throw "PyInstaller is not available. Install it with: py -3 -m pip install pyinstaller"
+}
+
+try {
+  Invoke-Python -PythonCommand $pythonCmd -Arguments @("-c", "import webview") | Out-Null
+} catch {
+  throw "pywebview is not available. Install dependencies with a supported runtime, for example: py -3.13 -m pip install -r requirements.txt"
 }
 
 foreach ($path in @(
@@ -72,7 +94,7 @@ Invoke-Python -PythonCommand $pythonCmd -Arguments @(
   "--noconfirm",
   "--onefile",
   "--windowed",
-  "--name", "XML_Prompt_Editor",
+  "--name", "XML_Editor_Desktop",
   "--add-data", ("{0}{1}." -f (Join-Path $projectRoot "index.html"), $separator),
   "--add-data", ("{0}{1}." -f (Join-Path $projectRoot "app.js"), $separator),
   "--add-data", ("{0}{1}." -f (Join-Path $projectRoot "style.css"), $separator),
