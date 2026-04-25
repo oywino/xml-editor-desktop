@@ -15,7 +15,7 @@ Microsoft's current guidance for off-Store Windows apps is:
 - SmartScreen reputation is file-hash based, so each new build starts with little or no file reputation
 - EV certificates no longer provide immediate SmartScreen bypass for first downloads
 - Microsoft Store distribution is the only Microsoft-documented route that avoids SmartScreen download warnings by default
-- Microsoft Trusted Signing is the recommended Microsoft signing service for non-Store distribution
+- Microsoft Artifact Signing, formerly Trusted Signing, is the recommended Microsoft signing service for non-Store distribution
 
 Sources:
 
@@ -31,7 +31,7 @@ For every `v*` tag, or for a manually dispatched existing tag, the workflow:
 1. checks out the release source
 2. installs Python 3.13 dependencies
 3. builds `XML_Editor_Desktop_<version>.exe`
-4. signs the EXE with Microsoft Trusted Signing
+4. signs the EXE with Microsoft Artifact Signing
 5. verifies the Authenticode signature
 6. writes `SHA256SUMS.txt`
 7. creates or updates the GitHub release
@@ -41,18 +41,18 @@ The helper script `scripts/verify-release.ps1` verifies a local release asset's 
 
 ## Required One-Time Microsoft Setup
 
-The workflow cannot sign until a Microsoft Trusted Signing account and certificate profile exist.
+The workflow cannot sign until a Microsoft Artifact Signing account and certificate profile exist.
 
 Required GitHub repository secrets:
 
 - `AZURE_TENANT_ID`
 - `AZURE_CLIENT_ID`
-- `AZURE_CLIENT_SECRET`
+- `AZURE_SUBSCRIPTION_ID`
 - `TRUSTED_SIGNING_ENDPOINT`
 - `TRUSTED_SIGNING_ACCOUNT_NAME`
 - `TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME`
 
-The Azure identity must have the Trusted Signing Certificate Profile Signer role for the certificate profile.
+The Azure identity must use a GitHub OIDC federated credential for this repository and must have the Artifact Signing Certificate Profile Signer role for the certificate profile.
 
 ## Current Releases
 
