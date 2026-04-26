@@ -290,18 +290,59 @@ def read_text_file(path: Path) -> str:
 
 
 def write_clipboard_text(text: str) -> bool:
-    try:
-        import tkinter
-
-        root = tkinter.Tk()
-        root.withdraw()
-        root.clipboard_clear()
-        root.clipboard_append(text)
-        root.update()
-        root.destroy()
-        return True
-    except Exception:
+    if os.name != "nt" or ctypes is None:
         return False
+
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    kernel32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+    kernel32.GlobalAlloc.restype = ctypes.c_void_p
+    kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    kernel32.GlobalFree.argtypes = [ctypes.c_void_p]
+    user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+    user32.OpenClipboard.restype = ctypes.c_bool
+    user32.EmptyClipboard.restype = ctypes.c_bool
+    user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+    user32.SetClipboardData.restype = ctypes.c_void_p
+    user32.CloseClipboard.restype = ctypes.c_bool
+
+    cf_unicode_text = 13
+    gmem_moveable = 0x0002
+    payload = str(text or "")
+    encoded_size = (len(payload) + 1) * ctypes.sizeof(ctypes.c_wchar)
+
+    handle = kernel32.GlobalAlloc(gmem_moveable, encoded_size)
+    if not handle:
+        return False
+
+    locked = kernel32.GlobalLock(handle)
+    if not locked:
+        kernel32.GlobalFree(handle)
+        return False
+
+    try:
+        ctypes.memmove(locked, ctypes.create_unicode_buffer(payload), encoded_size)
+    finally:
+        kernel32.GlobalUnlock(handle)
+
+    if not user32.OpenClipboard(None):
+        kernel32.GlobalFree(handle)
+        return False
+
+    try:
+        if not user32.EmptyClipboard():
+            kernel32.GlobalFree(handle)
+            handle = None
+            return False
+        if not user32.SetClipboardData(cf_unicode_text, handle):
+            kernel32.GlobalFree(handle)
+            return False
+        handle = None
+        return True
+    finally:
+        user32.CloseClipboard()
 
 
 def file_dialog_type(name: str) -> Any:
