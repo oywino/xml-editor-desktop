@@ -65,13 +65,20 @@ Required secrets:
 
 This path is kept as an option, but it is not required if the project chooses a non-Azure CA certificate.
 
+## Version And Release Policy
+
+- Major/minor milestones are published as GitHub Releases, for example `v1.0.0`, `v1.1.0`, or `v2.0.0`.
+- Patch versions are pushed as Git tags only, for example `v1.0.1`.
+- Patch tags should not publish GitHub Release assets.
+- The optional Azure signing workflow is manual-only so a patch tag cannot accidentally create a release.
+
 ## Current Releases
 
-Existing unsigned assets such as `v0.9.0` and `v0.9.1` should be replaced by signed binaries once a signing certificate or signing provider is available. Use `gh release upload --clobber` to replace release assets with signed files of the same name.
+Existing pre-1.0 unsigned assets remain available for traceability and are marked superseded. New public downloads should start at `v1.0.0` or later.
 
 ## Future Releases
 
-Future releases should not publish unsigned EXE files for public users. Build, sign, verify, hash, then upload.
+Future major/minor releases should not publish unsigned EXE files for public users when a signing path is available. Build, sign, verify, hash, then upload. Patch versions should be tags only.
 
 ## Remaining Reality
 

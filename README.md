@@ -88,7 +88,7 @@ The build script will:
 Example output:
 
 ```text
-release\XML_Editor_Desktop_v0.9.1.exe
+release\XML_Editor_Desktop_v1.0.0.exe
 ```
 
 ## WebView2 Runtime
@@ -108,6 +108,12 @@ https://github.com/oywino/xml-editor-desktop/releases
 ```
 
 For public distribution, sign release artifacts before uploading them. See `docs/RELEASE_SECURITY.md`.
+
+Release policy:
+
+- major/minor milestones, such as `v1.0.0` or `v1.1.0`, may be published as GitHub Releases
+- patch versions, such as `v1.0.1`, should be pushed as Git tags only
+- patch tags do not get release assets unless this policy is deliberately changed
 
 ## Development Workflow
 

@@ -1,13 +1,10 @@
 name: Signed Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Release tag to build and publish, for example v0.9.1"
+        description: "Minor/major release tag to build and publish, for example v1.0.0"
         required: true
         type: string
 
@@ -20,7 +17,7 @@ jobs:
     runs-on: windows-2022
     environment: release-signing
     env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+      RELEASE_TAG: ${{ inputs.version }}
 
     steps:
       - name: Check out release source
