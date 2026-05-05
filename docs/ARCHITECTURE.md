@@ -12,11 +12,13 @@ There is no remote backend, database, or framework runtime. All editing happens 
 ## Runtime Flow
 
 1. `XML_Editor.py` checks for packaged updates when running as a frozen Windows executable.
-2. It creates a pywebview window pointed at `index.html`.
-3. pywebview exposes `window.pywebview.api` to JavaScript.
-4. `app.js` creates `window.nativeHost`, a small adapter around that API.
-5. The editor initializes with a sample document.
-6. Open, save, clipboard, version, and dirty-state calls go through the native host when available.
+2. If a newer release is accepted, it downloads the matching EXE and starts a replacement script.
+3. If the replacement script cannot overwrite the current EXE, it leaves the downloaded update available and opens File Explorer to it.
+4. It creates a pywebview window pointed at `index.html`.
+5. pywebview exposes `window.pywebview.api` to JavaScript.
+6. `app.js` creates `window.nativeHost`, a small adapter around that API.
+7. The editor initializes with a sample document.
+8. Open, save, clipboard, version, and dirty-state calls go through the native host when available.
 
 The previous browser heartbeat/server lifecycle is intentionally bypassed in native mode.
 
@@ -29,7 +31,7 @@ The previous browser heartbeat/server lifecycle is intentionally bypassed in nat
 - file reading and writing
 - clipboard writes
 - dirty-state tracking for close confirmation
-- GitHub release update checks
+- GitHub release update checks and replacement-script creation
 - PyInstaller compatibility paths for bundled assets
 
 The exposed bridge methods are:
@@ -130,3 +132,4 @@ In native mode, saving uses the Python host and a native save dialog. In browser
 - pywebview is the only runtime dependency
 - frontend/editor changes should usually stay in `app.js` and `style.css`
 - native shell, file-system, update, and packaging changes belong in `XML_Editor.py` and `build_exe.ps1`
+- every tagged change must update `APP_VERSION` in `app.js` so the About section matches the tag

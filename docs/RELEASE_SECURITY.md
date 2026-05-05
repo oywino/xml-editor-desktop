@@ -67,10 +67,17 @@ This path is kept as an option, but it is not required if the project chooses a 
 
 ## Version And Release Policy
 
-- Major/minor milestones are published as GitHub Releases, for example `v1.0.0`, `v1.1.0`, or `v2.0.0`.
-- Patch versions are pushed as Git tags only, for example `v1.0.1`.
-- Patch tags should not publish GitHub Release assets.
-- The optional Azure signing workflow is manual-only so a patch tag cannot accidentally create a release.
+- Every repository modification must be committed and tagged.
+- Every tag must update `APP_VERSION` in `app.js`; the About section reads that value.
+- Major/minor milestones are published as GitHub Releases with EXE assets, for example `v1.0.0`, `v1.1.0`, or `v2.0.0`.
+- Patch tags are normally used for local validation before the next public minor release.
+- The optional Azure signing workflow is manual-only so releases cannot be created accidentally.
+
+## Update Behavior
+
+Packaged Windows builds check the latest GitHub Release at startup. If the user accepts an update, the app downloads the release EXE and starts a replacement script.
+
+The script tries to replace the current EXE after the running process exits. If Windows denies replacement, the script leaves the new EXE available beside the current EXE when possible. If that save also fails, it keeps the temp download. In both fallback cases it opens File Explorer to the available file and writes diagnostic output to `update.log` in the temp update folder.
 
 ## Current Releases
 
@@ -78,7 +85,7 @@ Existing pre-1.0 unsigned assets remain available for traceability and are marke
 
 ## Future Releases
 
-Future major/minor releases should not publish unsigned EXE files for public users when a signing path is available. Build, sign, verify, hash, then upload. Patch versions should be tags only.
+Future major/minor releases should not publish unsigned EXE files for public users when a signing path is available. Build, sign, verify, hash, then upload.
 
 ## Remaining Reality
 

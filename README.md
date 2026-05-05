@@ -88,7 +88,7 @@ The build script will:
 Example output:
 
 ```text
-release\XML_Editor_Desktop_v1.0.0.exe
+release\XML_Editor_Desktop_vX.Y.Z.exe
 ```
 
 ## WebView2 Runtime
@@ -107,13 +107,27 @@ Packaged builds check releases from:
 https://github.com/oywino/xml-editor-desktop/releases
 ```
 
+## Updates
+
+When running as a packaged Windows EXE, XML Editor Desktop checks the latest GitHub Release at startup.
+
+If a newer version exists and the user accepts the prompt, the app downloads the matching release EXE, exits, and runs a small replacement script. The script first tries to replace the currently running EXE in the folder it was launched from. If Windows blocks replacement because of folder permissions or file access, the downloaded update remains available instead:
+
+1. the updater tries to save the new EXE beside the current EXE
+2. if that also fails, the updater keeps the temp download
+3. File Explorer opens with the available update selected
+4. diagnostic details are written to `update.log` in the temp update folder
+
+This avoids requiring administrator rights for arbitrary launch folders while still allowing automatic replacement when the folder permits it.
+
 For public distribution, sign release artifacts before uploading them. See `docs/RELEASE_SECURITY.md`.
 
 Release policy:
 
-- major/minor milestones, such as `v1.0.0` or `v1.1.0`, may be published as GitHub Releases
-- patch versions, such as `v1.0.1`, should be pushed as Git tags only
-- patch tags do not get release assets unless this policy is deliberately changed
+- every repository modification must be committed and tagged
+- every tag must update `APP_VERSION` in `app.js`, which also updates the About section
+- major/minor milestones are published as GitHub Releases with EXE assets
+- patch tags are normally used for local validation before the next public minor release
 
 ## Development Workflow
 
