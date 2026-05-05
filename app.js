@@ -22,7 +22,7 @@
   </response_format>
 </prompt>`;
 
-  const APP_VERSION = 'v1.0.0';
+  const APP_VERSION = 'v1.1.0';
   const HEARTBEAT_INTERVAL_MS = 5000;
   const HISTORY_LIMIT = 100;
   const TYPING_COMMIT_DELAY_MS = 800;
@@ -2121,16 +2121,25 @@
     }
 
     function syncEditorDecorations() {
+      const showHighlightOverlay = state.rawIssues.length > 0;
       const lineCount = Math.max(1, textarea.value.split('\n').length);
       gutterLines.textContent = Array.from({ length: lineCount }, (_, index) => String(index + 1)).join('\n');
       gutter.scrollTop = textarea.scrollTop;
-      highlightLayer.scrollTop = textarea.scrollTop;
-      highlightLayer.scrollLeft = textarea.scrollLeft;
-      highlightLayer.innerHTML = buildRawHighlightHtml(
-        textarea.value,
-        state.rawIssues,
-        state.rawIssues.length > 0
-      );
+      highlightLayer.classList.toggle('hidden', !showHighlightOverlay);
+      textarea.classList.toggle('raw-editor-highlight-mode', showHighlightOverlay);
+      if (showHighlightOverlay) {
+        highlightLayer.scrollTop = textarea.scrollTop;
+        highlightLayer.scrollLeft = textarea.scrollLeft;
+        highlightLayer.innerHTML = buildRawHighlightHtml(
+          textarea.value,
+          state.rawIssues,
+          true
+        );
+      } else {
+        highlightLayer.scrollTop = 0;
+        highlightLayer.scrollLeft = 0;
+        highlightLayer.innerHTML = '';
+      }
     }
 
     const status = document.createElement('div');
@@ -2194,8 +2203,10 @@
     });
     textarea.addEventListener('scroll', () => {
       gutter.scrollTop = textarea.scrollTop;
-      highlightLayer.scrollTop = textarea.scrollTop;
-      highlightLayer.scrollLeft = textarea.scrollLeft;
+      if (state.rawIssues.length > 0) {
+        highlightLayer.scrollTop = textarea.scrollTop;
+        highlightLayer.scrollLeft = textarea.scrollLeft;
+      }
     });
     editorPane.appendChild(textarea);
     editorShell.appendChild(editorPane);
@@ -2215,14 +2226,18 @@
           textarea.scrollTop = targetScrollTop;
           textarea.scrollLeft = 0;
           gutter.scrollTop = targetScrollTop;
-          highlightLayer.scrollTop = targetScrollTop;
-          highlightLayer.scrollLeft = 0;
+          if (state.rawIssues.length > 0) {
+            highlightLayer.scrollTop = targetScrollTop;
+            highlightLayer.scrollLeft = 0;
+          }
         } else {
           textarea.scrollTop = view.scrollTop;
           textarea.scrollLeft = view.scrollLeft;
           gutter.scrollTop = view.scrollTop;
-          highlightLayer.scrollTop = view.scrollTop;
-          highlightLayer.scrollLeft = view.scrollLeft;
+          if (state.rawIssues.length > 0) {
+            highlightLayer.scrollTop = view.scrollTop;
+            highlightLayer.scrollLeft = view.scrollLeft;
+          }
         }
         if (view.wasFocused && view.selectionStart != null && view.selectionEnd != null) {
           textarea.focus({ preventScroll: true });

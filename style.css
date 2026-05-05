@@ -872,12 +872,16 @@ button:disabled {
   padding: 12px 14px;
   font-size: 13px;
   line-height: 1.65;
-  color: transparent;
+  color: #334155;
   caret-color: #334155;
   resize: none;
   outline: none;
   background: transparent;
   overflow: auto;
+}
+
+.raw-editor.raw-editor-highlight-mode {
+  color: transparent;
 }
 
 .raw-status {
