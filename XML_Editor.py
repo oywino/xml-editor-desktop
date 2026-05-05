@@ -159,22 +159,38 @@ def download_update(download_url: str, version_tag: str) -> Path:
 
 def create_update_script(current_exe: Path, downloaded_exe: Path) -> Path:
     script_path = downloaded_exe.parent / "apply_update.cmd"
+    log_path = downloaded_exe.parent / "update.log"
     lines = [
         "@echo off",
         "setlocal",
         f'set "TARGET={current_exe}"',
         f'set "SOURCE={downloaded_exe}"',
         f'set "PID={os.getpid()}"',
+        f'set "LOG={log_path}"',
+        'echo [%DATE% %TIME%] Starting XML Editor Desktop update > "%LOG%"',
+        'echo Target: "%TARGET%" >> "%LOG%"',
+        'echo Source: "%SOURCE%" >> "%LOG%"',
+        'echo Waiting for PID %PID% to exit. >> "%LOG%"',
         ":waitloop",
         'tasklist /FI "PID eq %PID%" | find "%PID%" >nul',
         "if not errorlevel 1 (",
         "  timeout /t 1 /nobreak >nul",
         "  goto waitloop",
         ")",
-        'move /Y "%SOURCE%" "%TARGET%" >nul',
-        "if errorlevel 1 goto end",
+        'echo PID exited. Replacing executable. >> "%LOG%"',
+        'if not exist "%SOURCE%" (',
+        '  echo Source executable is missing. >> "%LOG%"',
+        "  goto end",
+        ")",
+        'move /Y "%SOURCE%" "%TARGET%" >> "%LOG%" 2>&1',
+        "if errorlevel 1 (",
+        '  echo Replacement failed with errorlevel %ERRORLEVEL%. >> "%LOG%"',
+        "  goto end",
+        ")",
+        'echo Replacement succeeded. Restarting app. >> "%LOG%"',
         'start "" "%TARGET%"',
         ":end",
+        'echo [%DATE% %TIME%] Update script finished. >> "%LOG%"',
         'del "%~f0"',
     ]
     script_path.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
